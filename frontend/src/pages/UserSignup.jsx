@@ -23,6 +23,18 @@ const UserSignup = () => {
 
   const submitHandler = async (e) => {
     e.preventDefault()
+
+    // Add client-side validation
+    if (firstName.length < 3) {
+      alert('First name must be at least 3 characters long');
+      return;
+    }
+
+    if (password.length < 6) {
+      alert('Password must be at least 6 characters long');
+      return;
+    }
+
     const newUser = {
       fullname: {
         firstname: firstName,
@@ -32,21 +44,32 @@ const UserSignup = () => {
       password: password
     }
 
-    const response = await axios.post(`${import.meta.env.VITE_BASE_URL}/users/register`, newUser)
+    try {
+      const response = await axios.post(`${import.meta.env.VITE_BASE_URL}/users/register`, newUser)
 
-    if (response.status === 201) {
-      const data = response.data
-      setUser(data.user)
-      localStorage.setItem('token', data.token)
-      navigate('/home')
+      if (response.status === 201) {
+        const data = response.data
+        setUser(data.user)
+        localStorage.setItem('token', data.token)
+        navigate('/home')
+      }
+
+      setEmail('')
+      setFirstName('')
+      setLastName('')
+      setPassword('')
+    } catch (error) {
+      console.error('Registration error:', error.response?.data);
+      if (error.response?.data?.errors) {
+        // Show validation errors from backend
+        const errorMessages = error.response.data.errors.map(err => err.msg).join(', ');
+        alert(`Registration failed: ${errorMessages}`);
+      } else if (error.response?.data?.message) {
+        alert(`Registration failed: ${error.response.data.message}`);
+      } else {
+        alert('Registration failed. Please try again.');
+      }
     }
-
-
-    setEmail('')
-    setFirstName('')
-    setLastName('')
-    setPassword('')
-
   }
   return (
     <div>

@@ -23,6 +23,8 @@ const CaptainHome = () => {
     const { captain } = useContext(CaptainDataContext)
 
     useEffect(() => {
+        if (!captain) return; // Add null check for captain
+
         socket.emit('join', {
             userId: captain._id,
             userType: 'captain'
@@ -45,8 +47,8 @@ const CaptainHome = () => {
         const locationInterval = setInterval(updateLocation, 10000)
         updateLocation()
 
-        // return () => clearInterval(locationInterval)
-    }, [])
+        return () => clearInterval(locationInterval) // Also uncomment the cleanup
+    }, [captain]) // Add captain as dependency
 
     socket.on('new-ride', (data) => {
 
@@ -56,6 +58,7 @@ const CaptainHome = () => {
     })
 
     async function confirmRide() {
+        if (!captain) return; // Add null check for captain
 
         const response = await axios.post(`${import.meta.env.VITE_BASE_URL}/rides/confirm`, {
 

@@ -24,6 +24,38 @@ const CaptainSignup = () => {
 
   const submitHandler = async (e) => {
     e.preventDefault()
+
+    // Add client-side validation
+    if (firstName.length < 3) {
+      alert('First name must be at least 3 characters long');
+      return;
+    }
+
+    if (password.length < 6) {
+      alert('Password must be at least 6 characters long');
+      return;
+    }
+
+    if (vehicleColor.length < 3) {
+      alert('Vehicle color must be at least 3 characters long');
+      return;
+    }
+
+    if (vehiclePlate.length < 3) {
+      alert('Vehicle plate must be at least 3 characters long');
+      return;
+    }
+
+    if (!vehicleCapacity || parseInt(vehicleCapacity) < 1) {
+      alert('Vehicle capacity must be at least 1');
+      return;
+    }
+
+    if (!['car', 'motorcycle', 'auto'].includes(vehicleType)) {
+      alert('Please select a valid vehicle type (car, motorcycle, or auto)');
+      return;
+    }
+
     const captainData = {
       fullname: {
         firstname: firstName,
@@ -34,29 +66,41 @@ const CaptainSignup = () => {
       vehicle: {
         color: vehicleColor,
         plate: vehiclePlate,
-        capacity: vehicleCapacity,
+        capacity: parseInt(vehicleCapacity), // Convert to integer
         vehicleType: vehicleType
       }
     }
 
-    const response = await axios.post(`${import.meta.env.VITE_BASE_URL}/captains/register`, captainData)
+    try {
+      const response = await axios.post(`${import.meta.env.VITE_BASE_URL}/captains/register`, captainData)
 
-    if (response.status === 201) {
-      const data = response.data
-      setCaptain(data.captain)
-      localStorage.setItem('token', data.token)
-      navigate('/captain-home')
+      if (response.status === 201) {
+        const data = response.data
+        setCaptain(data.captain)
+        localStorage.setItem('captain-token', data.token)
+        navigate('/captain-home')
+      }
+
+      setEmail('')
+      setFirstName('')
+      setLastName('')
+      setPassword('')
+      setVehicleColor('')
+      setVehiclePlate('')
+      setVehicleCapacity('')
+      setVehicleType('')
+    } catch (error) {
+      console.error('Captain registration error:', error.response?.data);
+      if (error.response?.data?.errors) {
+        // Show validation errors from backend
+        const errorMessages = error.response.data.errors.map(err => err.msg).join(', ');
+        alert(`Registration failed: ${errorMessages}`);
+      } else if (error.response?.data?.message) {
+        alert(`Registration failed: ${error.response.data.message}`);
+      } else {
+        alert('Registration failed. Please try again.');
+      }
     }
-
-    setEmail('')
-    setFirstName('')
-    setLastName('')
-    setPassword('')
-    setVehicleColor('')
-    setVehiclePlate('')
-    setVehicleCapacity('')
-    setVehicleType('')
-
   }
   return (
     <div className='py-5 px-5 h-screen flex flex-col justify-between'>
@@ -160,7 +204,7 @@ const CaptainSignup = () => {
               <option value="" disabled>Select Vehicle Type</option>
               <option value="car">Car</option>
               <option value="auto">Auto</option>
-              <option value="moto">Moto</option>
+              <option value="motorcycle">Motorcycle</option>
             </select>
           </div>
 

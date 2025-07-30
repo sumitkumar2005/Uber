@@ -1,10 +1,18 @@
-
 import React, { useContext } from 'react'
 import { CaptainDataContext } from '../context/CapatainContext'
 
 const CaptainDetails = () => {
 
     const { captain } = useContext(CaptainDataContext)
+
+    // Add null check to prevent TypeError
+    if (!captain || !captain.fullname) {
+        return (
+            <div className="flex items-center justify-center p-4">
+                <p>Loading captain details...</p>
+            </div>
+        );
+    }
 
     return (
         <div>
