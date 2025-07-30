@@ -22,6 +22,7 @@ const Home = () => {
     const confirmRidePanelRef = useRef(null)
     const vehicleFoundRef = useRef(null)
     const waitingForDriverRef = useRef(null)
+    const noDriverFoundRef = useRef(null) // New ref for no driver found panel
     const panelRef = useRef(null)
     const panelCloseRef = useRef(null)
     const [ vehiclePanel, setVehiclePanel ] = useState(false)
@@ -34,6 +35,8 @@ const Home = () => {
     const [ fare, setFare ] = useState({})
     const [ vehicleType, setVehicleType ] = useState(null)
     const [ ride, setRide ] = useState(null)
+    const [ noDriverFound, setNoDriverFound ] = useState(false) // New state for no driver notification
+    const [ searchTimer, setSearchTimer ] = useState(null) // Timer for driver search timeout
 
     const navigate = useNavigate()
 
@@ -41,15 +44,22 @@ const Home = () => {
     const { user } = useContext(UserDataContext)
 
     useEffect(() => {
+        if (!user) return; // Add null check for user
+
+        console.log('User joining socket:', user._id);
         socket.emit("join", { userType: "user", userId: user._id })
     }, [ user ])
 
     socket.on('ride-confirmed', ride => {
-
-
-        setVehicleFound(false)
-        setWaitingForDriver(true)
-        setRide(ride)
+        // Clear the search timer since a driver was found
+        if (searchTimer) {
+            clearTimeout(searchTimer);
+            setSearchTimer(null);
+        }
+        setNoDriverFound(false);
+        setVehicleFound(false);
+        setWaitingForDriver(true);
+        setRide(ride);
     })
 
     socket.on('ride-started', ride => {
@@ -165,6 +175,18 @@ const Home = () => {
         }
     }, [ waitingForDriver ])
 
+    useGSAP(function () {
+        if (noDriverFound) {
+            gsap.to(noDriverFoundRef.current, {
+                transform: 'translateY(0)'
+            })
+        } else {
+            gsap.to(noDriverFoundRef.current, {
+                transform: 'translateY(100%)'
+            })
+        }
+    }, [ noDriverFound ])
+
 
     async function findTrip() {
         setVehiclePanel(true)
@@ -184,18 +206,63 @@ const Home = () => {
     }
 
     async function createRide() {
-        const response = await axios.post(`${import.meta.env.VITE_BASE_URL}/rides/create`, {
-            pickup,
-            destination,
-            vehicleType
-        }, {
-            headers: {
-                Authorization: `Bearer ${localStorage.getItem('token')}`
-            }
-        })
+        try {
+            console.log('Creating ride with:', { pickup, destination, vehicleType });
 
+            const response = await axios.post(`${import.meta.env.VITE_BASE_URL}/rides/create`, {
+                pickup,
+                destination,
+                vehicleType
+            }, {
+                headers: {
+                    Authorization: `Bearer ${localStorage.getItem('token')}`
+                }
+            })
 
+            console.log('Ride created successfully:', response.data);
+
+            // Set the ride data for potential future use
+            setRide(response.data);
+
+            // Start the search timer when a ride is created
+            startSearchTimer();
+
+        } catch (error) {
+            console.error('Error creating ride:', error);
+
+            // Show error to user
+            alert('Failed to create ride. Please try again.');
+
+            // Reset the UI state on error
+            setVehicleFound(false);
+            setConfirmRidePanel(true); // Go back to confirm panel
+        }
     }
+
+    // Function to handle no driver found timeout
+    const handleNoDriverTimeout = () => {
+        console.log('No driver found within time limit');
+        setVehicleFound(false);
+        setNoDriverFound(true);
+        setSearchTimer(null);
+    };
+
+    // Function to start search timer when ride is created
+    const startSearchTimer = () => {
+        const timer = setTimeout(handleNoDriverTimeout, 30000); // 30 seconds timeout
+        setSearchTimer(timer);
+    };
+
+    // Function to cancel search and reset UI
+    const cancelSearch = () => {
+        if (searchTimer) {
+            clearTimeout(searchTimer);
+            setSearchTimer(null);
+        }
+        setVehicleFound(false);
+        setNoDriverFound(false);
+        setConfirmRidePanel(true); // Go back to confirm ride panel
+    };
 
     return (
         <div className='h-screen relative overflow-hidden'>
@@ -285,6 +352,67 @@ const Home = () => {
                     setVehicleFound={setVehicleFound}
                     setWaitingForDriver={setWaitingForDriver}
                     waitingForDriver={waitingForDriver} />
+            </div>
+            <div ref={noDriverFoundRef} className='fixed w-full z-10 bottom-0 translate-y-full bg-white px-3 py-6 pt-12'>
+                <div>
+                    <h5 className='p-1 text-center w-[93%] absolute top-0' onClick={() => {
+                        setNoDriverFound(false)
+                    }}><i className="text-3xl text-gray-200 ri-arrow-down-wide-line"></i></h5>
+                    <h3 className='text-2xl font-semibold mb-5 text-red-600'>No Driver Found</h3>
+
+                    <div className='flex flex-col items-center text-center mb-6'>
+                        <div className='w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mb-4'>
+                            <i className="text-4xl text-red-500 ri-close-circle-line"></i>
+                        </div>
+                        <p className='text-lg text-gray-700 mb-2'>Sorry, no drivers are available in your area right now.</p>
+                        <p className='text-sm text-gray-500'>Please try again later or try expanding your search area.</p>
+                    </div>
+
+                    <div className='flex gap-2 justify-between flex-col items-center'>
+                        <div className='w-full mt-3'>
+                            <div className='flex items-center gap-5 p-3 border-b-2'>
+                                <i className="ri-map-pin-user-fill"></i>
+                                <div>
+                                    <h3 className='text-lg font-medium'>From</h3>
+                                    <p className='text-sm -mt-1 text-gray-600'>{pickup}</p>
+                                </div>
+                            </div>
+                            <div className='flex items-center gap-5 p-3 border-b-2'>
+                                <i className="text-lg ri-map-pin-2-fill"></i>
+                                <div>
+                                    <h3 className='text-lg font-medium'>To</h3>
+                                    <p className='text-sm -mt-1 text-gray-600'>{destination}</p>
+                                </div>
+                            </div>
+                            <div className='flex items-center gap-5 p-3'>
+                                <i className="ri-currency-line"></i>
+                                <div>
+                                    <h3 className='text-lg font-medium'>₹{fare[vehicleType] || '0'}</h3>
+                                    <p className='text-sm -mt-1 text-gray-600'>Estimated Fare</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className='mt-5 w-full space-y-3'>
+                            <button
+                                onClick={() => {
+                                    setNoDriverFound(false);
+                                    setVehicleFound(true);
+                                    startSearchTimer(); // Restart the search
+                                }}
+                                className='w-full bg-blue-600 text-white font-semibold p-3 rounded-lg'
+                            >
+                                Try Again
+                            </button>
+                            <button
+                                onClick={cancelSearch}
+                                className='w-full bg-gray-300 text-gray-700 font-semibold p-3 rounded-lg'
+                            >
+                                Cancel Ride
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     )

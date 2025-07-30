@@ -59,9 +59,15 @@ module.exports.loginCaptain = async (req, res, next) => {
         return res.status(401).json({ message: 'Invalid email or password' });
     }
 
+    // Set captain status to active by default when they log in
+    await captainModel.findByIdAndUpdate(captain._id, { status: 'active' });
+    captain.status = 'active'; // Update the local object too
+
     const token = captain.generateAuthToken();
 
     res.cookie('token', token);
+
+    console.log(`Captain ${captain.fullname.firstname} ${captain.fullname.lastname} logged in and set to active by default`);
 
     res.status(200).json({ token, captain });
 }
@@ -75,7 +81,36 @@ module.exports.logoutCaptain = async (req, res, next) => {
 
     await blackListTokenModel.create({ token });
 
+    // Set captain status to inactive when they log out
+    await captainModel.findByIdAndUpdate(req.captain._id, { status: 'inactive' });
+
+    console.log(`Captain ${req.captain.fullname.firstname} ${req.captain.fullname.lastname} logged out and set to inactive`);
+
     res.clearCookie('token');
 
     res.status(200).json({ message: 'Logout successfully' });
+}
+
+module.exports.toggleCaptainStatus = async (req, res, next) => {
+    try {
+        const captainId = req.captain._id;
+        const currentStatus = req.captain.status;
+        const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
+
+        const updatedCaptain = await captainModel.findByIdAndUpdate(
+            captainId,
+            { status: newStatus },
+            { new: true }
+        );
+
+        console.log(`Captain ${req.captain.fullname.firstname} ${req.captain.fullname.lastname} status changed from ${currentStatus} to ${newStatus}`);
+
+        res.status(200).json({
+            message: `Status updated to ${newStatus}`,
+            captain: updatedCaptain
+        });
+    } catch (error) {
+        console.error('Error toggling captain status:', error);
+        res.status(500).json({ message: 'Failed to update status' });
+    }
 }

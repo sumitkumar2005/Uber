@@ -18,16 +18,17 @@ module.exports.createRide = async (req, res) => {
         res.status(201).json(ride);
 
         const pickupCoordinates = await mapService.getAddressCoordinate(pickup);
+        console.log('Pickup coordinates:', pickupCoordinates);
 
-
-
-        const captainsInRadius = await mapService.getCaptainsInTheRadius(pickupCoordinates.ltd, pickupCoordinates.lng, 2);
+        const captainsInRadius = await mapService.getCaptainsInTheRadius(pickupCoordinates.ltd, pickupCoordinates.lng, 10); // Temporarily increased to 10km for testing
+        console.log(`Found ${captainsInRadius.length} captains in radius`);
 
         ride.otp = ""
 
         const rideWithUser = await rideModel.findOne({ _id: ride._id }).populate('user');
 
         captainsInRadius.map(captain => {
+            console.log(`Sending notification to captain: ${captain._id}, socketId: ${captain.socketId}`);
 
             sendMessageToSocketId(captain.socketId, {
                 event: 'new-ride',

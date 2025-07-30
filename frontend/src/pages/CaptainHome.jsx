@@ -1,11 +1,10 @@
-import React, { useRef, useState } from 'react'
+import React, { useRef, useState, useEffect, useContext } from 'react'
 import { Link } from 'react-router-dom'
 import CaptainDetails from '../components/CaptainDetails'
-import RidePopUp from '../components/RidePopUp'
+import RidePopUp from '../components/RidePopUp_fixed.jsx'
 import { useGSAP } from '@gsap/react'
 import gsap from 'gsap'
-import ConfirmRidePopUp from '../components/ConfirmRidePopUp'
-import { useEffect, useContext } from 'react'
+import ConfirmRidePopUp from '../components/ConfirmRidePopUp_fixed.jsx'
 import { SocketContext } from '../context/SocketContext'
 import { CaptainDataContext } from '../context/CapatainContext'
 import axios from 'axios'
@@ -14,21 +13,35 @@ const CaptainHome = () => {
 
     const [ ridePopupPanel, setRidePopupPanel ] = useState(false)
     const [ confirmRidePopupPanel, setConfirmRidePopupPanel ] = useState(false)
+    const [ isOnline, setIsOnline ] = useState(true) // Track captain online/offline status
 
     const ridePopupPanelRef = useRef(null)
     const confirmRidePopupPanelRef = useRef(null)
     const [ ride, setRide ] = useState(null)
 
     const { socket } = useContext(SocketContext)
-    const { captain } = useContext(CaptainDataContext)
+    const { captain, setCaptain } = useContext(CaptainDataContext)
 
     useEffect(() => {
         if (!captain) return; // Add null check for captain
+
+        // Set initial online status based on captain's status
+        setIsOnline(captain.status === 'active');
 
         socket.emit('join', {
             userId: captain._id,
             userType: 'captain'
         })
+
+        // Set up socket event listener for new rides
+        const handleNewRide = (data) => {
+            console.log('New ride received:', data);
+            setRide(data);
+            setRidePopupPanel(true);
+        };
+
+        socket.on('new-ride', handleNewRide);
+
         const updateLocation = () => {
             if (navigator.geolocation) {
                 navigator.geolocation.getCurrentPosition(position => {
@@ -47,15 +60,34 @@ const CaptainHome = () => {
         const locationInterval = setInterval(updateLocation, 10000)
         updateLocation()
 
-        return () => clearInterval(locationInterval) // Also uncomment the cleanup
+        // Cleanup function
+        return () => {
+            clearInterval(locationInterval);
+            socket.off('new-ride', handleNewRide); // Remove the specific listener
+        }
     }, [captain]) // Add captain as dependency
 
-    socket.on('new-ride', (data) => {
+    // Function to toggle captain online/offline status
+    const toggleOnlineStatus = async () => {
+        try {
+            const response = await axios.post(`${import.meta.env.VITE_BASE_URL}/captains/toggle-status`, {}, {
+                headers: {
+                    Authorization: `Bearer ${localStorage.getItem('token')}`
+                }
+            });
 
-        setRide(data)
-        setRidePopupPanel(true)
+            // Update local state and context
+            const newStatus = response.data.captain.status;
+            setIsOnline(newStatus === 'active');
+            setCaptain(response.data.captain);
 
-    })
+            console.log(`Captain status changed to: ${newStatus}`);
+        } catch (error) {
+            console.error('Error toggling captain status:', error);
+            alert('Failed to update status. Please try again.');
+        }
+    };
+
 
     async function confirmRide() {
         if (!captain) return; // Add null check for captain
@@ -115,6 +147,26 @@ const CaptainHome = () => {
 
             </div>
             <div className='h-2/5 p-6'>
+                {/* Online/Offline Toggle Button */}
+                <div className='flex items-center justify-between mb-4'>
+                    <div className='flex items-center gap-3'>
+                        <div className={`w-3 h-3 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                        <span className='text-lg font-medium'>
+                            {isOnline ? 'Online' : 'Offline'}
+                        </span>
+                    </div>
+                    <button
+                        onClick={toggleOnlineStatus}
+                        className={`px-4 py-2 rounded-lg font-semibold transition-colors ${
+                            isOnline 
+                                ? 'bg-red-500 text-white hover:bg-red-600' 
+                                : 'bg-green-500 text-white hover:bg-green-600'
+                        }`}
+                    >
+                        {isOnline ? 'Go Offline' : 'Go Online'}
+                    </button>
+                </div>
+
                 <CaptainDetails />
             </div>
             <div ref={ridePopupPanelRef} className='fixed w-full z-10 bottom-0 translate-y-full bg-white px-3 py-10 pt-12'>
